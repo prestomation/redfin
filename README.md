@@ -1,71 +1,68 @@
-# Redfin
+# Redfin Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
 
 [![hacs][hacsbadge]][hacs]
 [![maintainer][maintenance-shield]][maintainer]
-[![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 
 <img src="https://raw.githubusercontent.com/home-assistant/brands/master/custom_integrations/redfin/logo.png" width="40%">
 
-### <span style="color:red">_This component requires HA Core version 2021.6.0 or greater!_</span>
+### _This component requires HA Core version 2021.6.0 or greater._
 
-This is a _Custom Integration_ for [Home Assistant](https://www.home-assistant.io/). It uses the unofficial [Redfin](https://www.redfin.com) API to get property value estimates.
+This is a _Custom Integration_ for [Home Assistant](https://www.home-assistant.io/). It uses the unofficial [Redfin](https://www.redfin.com) API to get property value estimates and neighborhood scores.
 
-There currently is support for the Sensor device type within Home Assistant.
+Uses [`prestomation/pyredfin`](https://github.com/prestomation/pyredfin) — a maintained fork of the original `redfin` Python library with:
+- Fixed 403 errors (real browser User-Agent)
+- Working `neighborhood_stats()` endpoint
+- Rate limit handling
 
 ## Installation
 
 ### HACS installation
 
-This Integration is part of the default HACS store, so go to the HACS page and search for _Redfin_.
+Go to the HACS page and search for _Redfin_.
 
 ### Manual Installation
 
-To manually add Redfin to your installation, create this folder structure in your /config directory:
-
-`custom_components/redfin`.
-
-Then drop the following files into that folder:
-
-```yaml
-translations/en.json
-__init__.py
-config_flow.py
-const.py
-hacs.json
-sensor.py
-manifest.json
-```
+Create `custom_components/redfin/` in your HA config directory and drop in all files from this repo.
 
 ## Configuration
 
-You will need the Redfin property ID for each property you’d like to track. This information is available from the URL of a property you are interested in. If you’re the owner of this property, it’s recommended to claim the listing and update the property information to help the information be as accurate as possible.
+You will need the Redfin property ID for each property you'd like to track. Find it in the Redfin URL:
 
-For example, given this Redfin URL: https://www.redfin.com/DC/Washington/1745-Q-St-NW-20009/unit-3/home/9860590 the property ID is 9860590.
+> `https://www.redfin.com/DC/Washington/1745-Q-St-NW-20009/unit-3/home/9860590`
+>
+> Property ID: `9860590`
 
-To enable this sensor, add new Redfin integration component in the Home Assistant UI and follow the prompts to add your properties.
+Add the Redfin integration via Home Assistant UI and follow the prompts.
 
-The sensor provides the following attributes:
+## Sensor Attributes
 
-- amount
-- amount_currency
-- amount_formatted
-- address
-- full_address
-- redfin_url
-- street_view
+| Attribute | Description |
+|-----------|-------------|
+| `amount` | Estimated property value (USD) |
+| `amount_currency` | `USD` |
+| `amount_formatted` | Human-readable estimate (e.g. "Est. $750K") |
+| `address` | Street address |
+| `full_address` | Full address including city and state |
+| `redfin_url` | Link to property on Redfin |
+| `street_view` | Google Street View link (from lat/long) |
+| `walk_score` | Walk Score (0–100) |
+| `bike_score` | Bike Score (0–100) |
+| `transit_score` | Transit Score (0–100) |
+| `property_id` | Redfin property ID |
+
+## Note on Requirements
+
+The integration currently pulls `pyredfin` directly from GitHub. Once published to PyPI, this will switch to a version-pinned PyPI install.
 
 <!---->
 
-[buymecoffee]: https://www.buymeacoffee.com/dreed47.david
-[buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg
-[commits-shield]: https://img.shields.io/github/commit-activity/y/dreed47/redfin.svg
-[commits]: https://github.com/dreed47/redfin/commits/main
+[commits-shield]: https://img.shields.io/github/commit-activity/y/prestomation/redfin.svg
+[commits]: https://github.com/prestomation/redfin/commits/main
 [hacs]: https://github.com/custom-components/hacs
 [hacsbadge]: https://img.shields.io/badge/HACS-Default-orange.svg
-[maintenance-shield]: https://img.shields.io/badge/maintainer-%20%40dreed47-blue.svg
-[maintainer]: https://github.com/dreed47
-[releases-shield]: https://img.shields.io/github/v/release/dreed47/redfin
-[releases]: https://github.com/dreed47/redfin/releases
+[maintenance-shield]: https://img.shields.io/badge/maintainer-%40prestomation-blue.svg
+[releases-shield]: https://img.shields.io/github/v/release/prestomation/redfin
+[releases]: https://github.com/prestomation/redfin/releases

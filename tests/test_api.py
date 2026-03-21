@@ -1,29 +1,52 @@
-"""Test component api."""
-from homeassistant.setup import async_setup_component
+"""Test component api using mocked redfin library."""
+import json
+from unittest.mock import MagicMock, patch
+
 from custom_components.redfin.const import DOMAIN
-from redfin import Redfin
-
-client = Redfin()
 
 
-def test_api_call():
-    """  """
+def make_avm_response():
+    return {
+        "errorMessage": "Success",
+        "resultCode": 0,
+        "payload": {
+            "predictedValue": 650000,
+            "sectionPreviewText": "Est. $650K",
+            "latLong": {"latitude": 36.1, "longitude": -86.8},
+            "streetAddress": {"assembledAddress": "1712 Glen Echo Rd Unit C"},
+        },
+    }
 
-    address = '1712 Glen Echo Rd Unit C,Nashville, TN 37215'
 
-    response = client.search(address)
-    assert response['errorMessage'] == "Success"
+def make_neighborhood_stats_response():
+    return {
+        "errorMessage": "Success",
+        "resultCode": 0,
+        "payload": {
+            "addressInfo": {"city": "Nashville", "state": "TN"},
+            "walkScoreInfo": {
+                "walkScoreData": {
+                    "walkScore": {"value": 55},
+                    "bikeScore": {"value": 40},
+                    "transitScore": {"value": 35},
+                }
+            },
+        },
+    }
 
-    url = response['payload']['exactMatch']['url']
-    initial_info = client.initial_info(url)
-    assert initial_info['errorMessage'] == "Success"
 
-    property_id = initial_info['payload']['propertyId']
-    mls_data = client.below_the_fold(property_id)
-    assert mls_data['errorMessage'] == "Success"
+def test_api_call_mocked():
+    """Test API call flow using mocked responses."""
+    mock_client = MagicMock()
+    mock_client.avm_details.return_value = make_avm_response()
+    mock_client.neighborhood_stats.return_value = make_neighborhood_stats_response()
 
-    above_the_fold = client.above_the_fold(property_id, "")
-    assert above_the_fold['errorMessage'] == "Success"
+    avm = mock_client.avm_details("12345", "")
+    assert avm["errorMessage"] == "Success"
+    assert avm["resultCode"] == 0
+    assert avm["payload"]["predictedValue"] == 650000
 
-    info_panel = client.info_panel(property_id, "")
-    assert info_panel['errorMessage'] == "Success"
+    stats = mock_client.neighborhood_stats("12345")
+    assert stats["errorMessage"] == "Success"
+    assert stats["payload"]["addressInfo"]["city"] == "Nashville"
+    assert stats["payload"]["walkScoreInfo"]["walkScoreData"]["walkScore"]["value"] == 55

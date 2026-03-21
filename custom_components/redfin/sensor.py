@@ -8,9 +8,10 @@ from homeassistant import config_entries, core
 
 from .const import (DEFAULT_NAME, DOMAIN, CONF_PROPERTIES, ATTRIBUTION, DEFAULT_SCAN_INTERVAL, CONF_PROPERTY_IDS,
                     ICON, CONF_PROPERTY_ID, ATTR_AMOUNT, ATTR_AMOUNT_FORMATTED, ATTR_ADDRESS, ATTR_FULL_ADDRESS,
-                    ATTR_CURRENCY, ATTR_STREET_VIEW, ATTR_REDFIN_URL, RESOURCE_URL, ATTR_UNIT_OF_MEASUREMENT)
+                    ATTR_CURRENCY, ATTR_STREET_VIEW, ATTR_REDFIN_URL, RESOURCE_URL, ATTR_UNIT_OF_MEASUREMENT,
+                    ATTR_WALK_SCORE, ATTR_BIKE_SCORE, ATTR_TRANSIT_SCORE)
 from homeassistant.core import callback
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
+from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity, SensorStateClass
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_SCAN_INTERVAL
 import homeassistant.helpers.config_validation as cv
@@ -50,10 +51,16 @@ class RedfinDataSensor(SensorEntity):
         self._name = name
         self.params = params
         self.data = None
-        self.address = None
+        self.address = f"property {params[CONF_PROPERTY_ID]}"
         self.property_id = params[CONF_PROPERTY_ID]
         self._state = None
         self._interval = timedelta(minutes=interval)
+        self._unsub_timer = None
+
+    @property
+    def should_poll(self):
+        """Disable built-in HA polling — we use a custom timer."""
+        return False
 
     @property
     def unique_id(self):
@@ -77,7 +84,7 @@ class RedfinDataSensor(SensorEntity):
     @property
     def state_class(self):
         # set state_class to 'measurement' so long-term statistics are generated
-        return STATE_CLASS_MEASUREMENT
+        return SensorStateClass.MEASUREMENT
 
     @property
     def extra_state_attributes(self):
@@ -100,67 +107,71 @@ class RedfinDataSensor(SensorEntity):
             """Update the entity."""
             self.async_schedule_update_ha_state(True)
 
-        async_track_time_interval(self.hass, async_update, self._interval)
+        self._unsub_timer = async_track_time_interval(self.hass, async_update, self._interval)
+
+    async def async_will_remove_from_hass(self):
+        """Clean up timer on entity removal."""
+        if self._unsub_timer:
+            self._unsub_timer()
+            self._unsub_timer = None
 
     def update(self):
         """Get the latest data and update the states."""
 
         client = Redfin()
+        property_id = self.params[CONF_PROPERTY_ID]
+
         try:
-            avm_details = client.avm_details(self.params[CONF_PROPERTY_ID], "")
+            avm_details = client.avm_details(property_id, "")
             if avm_details["resultCode"] != 0:
                 _LOGGER.error("The API returned: %s",
                               avm_details["errorMessage"])
-        except:
-            _LOGGER.error("Unable to retrieve data from %s", RESOURCE_URL)
+                return
+        except Exception as err:
+            _LOGGER.error("Unable to retrieve avm_details from Redfin API: %s", err)
             return
         _LOGGER.debug("%s - The avm_details API returned: %s for property id: %s",
-                      self._name, avm_details["errorMessage"], self.params[CONF_PROPERTY_ID])
+                      self._name, avm_details["errorMessage"], property_id)
 
         try:
-            above_the_fold = client.above_the_fold(
-                self.params[CONF_PROPERTY_ID], "")
-            if above_the_fold["resultCode"] != 0:
-                _LOGGER.error("The API returned: %s",
-                              above_the_fold["errorMessage"])
-        except:
-            _LOGGER.error("Unable to retrieve data from %s", RESOURCE_URL)
+            neighborhood_stats = client.neighborhood_stats(property_id)
+            if neighborhood_stats["resultCode"] != 0:
+                _LOGGER.error("The neighborhood_stats API returned: %s",
+                              neighborhood_stats["errorMessage"])
+                return
+        except Exception as err:
+            _LOGGER.error("Unable to retrieve neighborhood_stats from Redfin API: %s", err)
             return
-        _LOGGER.debug("%s - The above_the_fold API returned: %s for property id: %s",
-                      self._name, above_the_fold["errorMessage"], self.params[CONF_PROPERTY_ID])
+        _LOGGER.debug("%s - The neighborhood_stats API returned: %s for property id: %s",
+                      self._name, neighborhood_stats["errorMessage"], property_id)
+
+        # Extract address
+        try:
+            address_line = avm_details["payload"]["streetAddress"]["assembledAddress"]
+        except (KeyError, TypeError):
+            address_line = "Unknown"
 
         try:
-            info_panel = client.info_panel(self.params[CONF_PROPERTY_ID], "")
-            if info_panel["resultCode"] != 0:
-                _LOGGER.error("The API returned: %s",
-                              info_panel["errorMessage"])
-        except:
-            _LOGGER.error("Unable to retrieve data from %s", RESOURCE_URL)
-            return
-        _LOGGER.debug("%s - The info_panel API returned: %s for property id: %s",
-                      self._name, info_panel["errorMessage"], self.params[CONF_PROPERTY_ID])
+            city = neighborhood_stats["payload"]["addressInfo"]["city"]
+            state = neighborhood_stats["payload"]["addressInfo"]["state"]
+        except (KeyError, TypeError):
+            city = ""
+            state = ""
 
-        if 'url' in info_panel["payload"]["mainHouseInfo"]:
-            redfinUrl = RESOURCE_URL + \
-                info_panel["payload"]["mainHouseInfo"]['url']
-        else:
-            redfinUrl = 'Not Set'
+        self.address = f"{address_line}, {city}, {state}" if city and state else address_line
 
-        if 'streetAddress' in above_the_fold["payload"]["addressSectionInfo"]:
-            address_line = above_the_fold["payload"]["addressSectionInfo"]["streetAddress"][
-                "assembledAddress"
-            ]
-            city = above_the_fold["payload"]["addressSectionInfo"]["city"]
-            state = above_the_fold["payload"]["addressSectionInfo"]["state"]
-            self.address = f"{address_line} {city} {state}"
-        else:
-            self.address = "unknown"
+        # Extract lat/long and build street view URL
+        try:
+            lat = avm_details["payload"]["latLong"]["latitude"]
+            lng = avm_details["payload"]["latLong"]["longitude"]
+            streetViewUrl = f"https://www.google.com/maps/@{lat},{lng},3a,75y,90t/data=!3m6!1e1"
+        except (KeyError, TypeError):
+            streetViewUrl = "Not Set"
 
-        if 'streetViewUrl' in above_the_fold["payload"]["mediaBrowserInfo"]["streetView"]:
-            streetViewUrl = above_the_fold["payload"]["mediaBrowserInfo"]["streetView"]["streetViewUrl"]
-        else:
-            streetViewUrl = 'Not Set'
+        # Redfin URL (generic — no slug available from API)
+        redfinUrl = f"https://www.redfin.com/home/{property_id}"
 
+        # AVM estimated value
         if 'predictedValue' in avm_details["payload"]:
             predictedValue = avm_details["payload"]["predictedValue"]
         else:
@@ -171,6 +182,15 @@ class RedfinDataSensor(SensorEntity):
         else:
             sectionPreviewText = 'Not Set'
 
+        # Walk/bike/transit scores
+        try:
+            score_data = neighborhood_stats["payload"]["walkScoreInfo"]["walkScoreData"]
+            walk_score = score_data["walkScore"]["value"]
+            bike_score = score_data["bikeScore"]["value"]
+            transit_score = score_data["transitScore"]["value"]
+        except (KeyError, TypeError):
+            walk_score = bike_score = transit_score = None
+
         details = {}
         details[ATTR_AMOUNT] = predictedValue
         details[ATTR_CURRENCY] = "USD"
@@ -180,7 +200,10 @@ class RedfinDataSensor(SensorEntity):
         details[ATTR_FULL_ADDRESS] = self.address
         details[ATTR_REDFIN_URL] = redfinUrl
         details[ATTR_STREET_VIEW] = streetViewUrl
-        details[CONF_PROPERTY_ID] = self.params[CONF_PROPERTY_ID]
+        details[ATTR_WALK_SCORE] = walk_score
+        details[ATTR_BIKE_SCORE] = bike_score
+        details[ATTR_TRANSIT_SCORE] = transit_score
+        details[CONF_PROPERTY_ID] = property_id
         details[ATTR_ATTRIBUTION] = ATTRIBUTION
 
         self.data = details

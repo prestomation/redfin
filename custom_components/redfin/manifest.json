@@ -1,12 +1,12 @@
 {
   "domain": "redfin",
   "name": "Redfin",
-  "documentation": "https://github.com/dreed47/redfin",
-  "issue_tracker": "https://github.com/dreed47/redfin/issues",
+  "documentation": "https://github.com/prestomation/redfin",
+  "issue_tracker": "https://github.com/prestomation/redfin/issues",
   "dependencies": [],
-  "codeowners": ["@dreed47"],
-  "requirements": ["redfin==0.1.1"],
+  "codeowners": ["@prestomation"],
+  "requirements": ["redfin @ git+https://github.com/prestomation/pyredfin@main"],
   "iot_class": "cloud_polling",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "config_flow": true
 }

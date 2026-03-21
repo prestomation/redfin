@@ -4,6 +4,7 @@ DEFAULT_NAME = "Redfin"
 
 ATTRIBUTION = "Data provided by Redfin.com"
 RESOURCE_URL = "https://www.redfin.com"
+
 ATTR_AMOUNT = "amount"
 ATTR_AMOUNT_FORMATTED = "amount_formatted"
 ATTR_ADDRESS = "address"
@@ -12,6 +13,9 @@ ATTR_CURRENCY = "amount_currency"
 ATTR_STREET_VIEW = "street_view"
 ATTR_REDFIN_URL = "redfin_url"
 ATTR_UNIT_OF_MEASUREMENT = "unit_of_measurement"
+ATTR_WALK_SCORE = "walk_score"
+ATTR_BIKE_SCORE = "bike_score"
+ATTR_TRANSIT_SCORE = "transit_score"
 
 CONF_PROPERTIES = "properties"
 CONF_PROPERTY_ID = "property_id"

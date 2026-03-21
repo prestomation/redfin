@@ -1,4 +1,5 @@
 """Tests for the config flow."""
+import pytest
 from unittest import mock
 
 from homeassistant.const import CONF_DEVICE_CLASS, CONF_DEVICE_ID, CONF_HOST, CONF_PORT
