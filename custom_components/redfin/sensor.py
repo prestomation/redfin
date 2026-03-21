@@ -11,7 +11,7 @@ from .const import (DEFAULT_NAME, DOMAIN, CONF_PROPERTIES, ATTRIBUTION, DEFAULT_
                     ATTR_CURRENCY, ATTR_STREET_VIEW, ATTR_REDFIN_URL, RESOURCE_URL, ATTR_UNIT_OF_MEASUREMENT,
                     ATTR_WALK_SCORE, ATTR_BIKE_SCORE, ATTR_TRANSIT_SCORE)
 from homeassistant.core import callback
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
+from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity, SensorStateClass
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_SCAN_INTERVAL
 import homeassistant.helpers.config_validation as cv
@@ -51,10 +51,16 @@ class RedfinDataSensor(SensorEntity):
         self._name = name
         self.params = params
         self.data = None
-        self.address = None
+        self.address = f"property {params[CONF_PROPERTY_ID]}"
         self.property_id = params[CONF_PROPERTY_ID]
         self._state = None
         self._interval = timedelta(minutes=interval)
+        self._unsub_timer = None
+
+    @property
+    def should_poll(self):
+        """Disable built-in HA polling — we use a custom timer."""
+        return False
 
     @property
     def unique_id(self):
@@ -78,7 +84,7 @@ class RedfinDataSensor(SensorEntity):
     @property
     def state_class(self):
         # set state_class to 'measurement' so long-term statistics are generated
-        return STATE_CLASS_MEASUREMENT
+        return SensorStateClass.MEASUREMENT
 
     @property
     def extra_state_attributes(self):
@@ -101,7 +107,13 @@ class RedfinDataSensor(SensorEntity):
             """Update the entity."""
             self.async_schedule_update_ha_state(True)
 
-        async_track_time_interval(self.hass, async_update, self._interval)
+        self._unsub_timer = async_track_time_interval(self.hass, async_update, self._interval)
+
+    async def async_will_remove_from_hass(self):
+        """Clean up timer on entity removal."""
+        if self._unsub_timer:
+            self._unsub_timer()
+            self._unsub_timer = None
 
     def update(self):
         """Get the latest data and update the states."""
@@ -114,8 +126,9 @@ class RedfinDataSensor(SensorEntity):
             if avm_details["resultCode"] != 0:
                 _LOGGER.error("The API returned: %s",
                               avm_details["errorMessage"])
-        except Exception:
-            _LOGGER.error("Unable to retrieve avm_details from Redfin API")
+                return
+        except Exception as err:
+            _LOGGER.error("Unable to retrieve avm_details from Redfin API: %s", err)
             return
         _LOGGER.debug("%s - The avm_details API returned: %s for property id: %s",
                       self._name, avm_details["errorMessage"], property_id)
@@ -125,8 +138,9 @@ class RedfinDataSensor(SensorEntity):
             if neighborhood_stats["resultCode"] != 0:
                 _LOGGER.error("The neighborhood_stats API returned: %s",
                               neighborhood_stats["errorMessage"])
-        except Exception:
-            _LOGGER.error("Unable to retrieve neighborhood_stats from Redfin API")
+                return
+        except Exception as err:
+            _LOGGER.error("Unable to retrieve neighborhood_stats from Redfin API: %s", err)
             return
         _LOGGER.debug("%s - The neighborhood_stats API returned: %s for property id: %s",
                       self._name, neighborhood_stats["errorMessage"], property_id)
@@ -172,18 +186,10 @@ class RedfinDataSensor(SensorEntity):
         try:
             score_data = neighborhood_stats["payload"]["walkScoreInfo"]["walkScoreData"]
             walk_score = score_data["walkScore"]["value"]
-        except (KeyError, TypeError):
-            walk_score = None
-
-        try:
             bike_score = score_data["bikeScore"]["value"]
-        except (KeyError, TypeError, UnboundLocalError):
-            bike_score = None
-
-        try:
             transit_score = score_data["transitScore"]["value"]
-        except (KeyError, TypeError, UnboundLocalError):
-            transit_score = None
+        except (KeyError, TypeError):
+            walk_score = bike_score = transit_score = None
 
         details = {}
         details[ATTR_AMOUNT] = predictedValue
