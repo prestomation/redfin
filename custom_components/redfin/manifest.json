@@ -4,8 +4,10 @@
   "documentation": "https://github.com/prestomation/redfin",
   "issue_tracker": "https://github.com/prestomation/redfin/issues",
   "dependencies": [],
-  "codeowners": ["@prestomation"],
-  "requirements": ["redfin @ git+https://github.com/prestomation/pyredfin@main"],
+  "codeowners": [
+    "@prestomation"
+  ],
+  "requirements": [],
   "iot_class": "cloud_polling",
   "version": "1.2.0",
   "config_flow": true

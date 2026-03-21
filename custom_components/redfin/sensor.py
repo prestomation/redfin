@@ -3,7 +3,7 @@ from datetime import timedelta
 import logging
 
 import voluptuous as vol
-from redfin import Redfin
+from .redfin_client import Redfin
 from homeassistant import config_entries, core
 
 from .const import (DEFAULT_NAME, DOMAIN, CONF_PROPERTIES, ATTRIBUTION, DEFAULT_SCAN_INTERVAL, CONF_PROPERTY_IDS,
